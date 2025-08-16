@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TikTok Comment Analyzer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>🎬 TikTok Comment Analyzer</h1>
+
+    <div id="status" class="status">Hãy mở 1 trang video TikTok.</div>
+
+    <div class="progress-bar" id="progressBar">
+      <div id="progressFill"></div>
+    </div>
+
+    <div class="stats hidden" id="stats">
+      <div class="stat-item">
+        <span class="stat-number" id="commentCount">0</span>
+        <span class="stat-label">Comment</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-number" id="positiveCount">0</span>
+        <span class="stat-label">Tích cực</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="startBtn" class="btn btn-primary">🚀 Bắt đầu thu thập</button>
+      <button id="exportBtn" class="btn btn-success hidden">📊 Xuất Excel</button>
+      <button id="clearBtn" class="btn btn-secondary hidden">🗑️ Xóa dữ liệu</button>
+    </div>
+
+    <div class="settings">
+      <h3>⚙️ Cài đặt</h3>
+      <div class="setting-item">
+        <label for="maxComments">Số comment tối đa:</label>
+        <input type="number" id="maxComments" value="500" min="20" max="10000" />
+      </div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
