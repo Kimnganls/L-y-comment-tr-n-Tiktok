@@ -1,58 +1,30 @@
-// TikTok Comment Collector — v4.0 (Slow & Greedy: lấy HẾT + cuộn chậm)
-
-// idle callback nhẹ
+// TikTok Comment Collector — v4.1 (Respect Max: lấy đúng SỐ YÊU CẦU)
 const __ric = window.requestIdleCallback || (cb => setTimeout(() => cb({ timeRemaining: () => 1 }), 0));
 
 class TikTokCommentCollector {
   constructor() {
     this.isCollecting = false;
-
-    // data
     this.collectedIds = new Set();
     this.comments = [];
     this.positiveCount = 0;
 
-    // dom/flow
-    this._panel = null;
-    this._scroller = null;
-    this._observer = null;
-    this._queue = [];         // items mới phát sinh sẽ đẩy vào đây
-    this._processing = false;
-    this._lastNewAt = 0;
+    this._panel = null; this._scroller = null; this._observer = null;
+    this._queue = []; this._processing = false; this._lastNewAt = 0;
+    this._scrollRAF = 0; this._progressTimer = 0;
 
-    // loops
-    this._scrollRAF = 0;
-    this._progressTimer = 0;
-
-    // config
     this.settings = {
-      // nếu muốn “không giới hạn”, cứ để collectAll = true (mặc định)
-      collectAll: true,       // <- LẤY HẾT
-      forceMax: false,        // đặt true để dùng maxComments
-      maxComments: 500,       // chỉ dùng khi forceMax = true
-
-      // nhịp chậm rãi
-      clickDelay: 380,        // ms giữa các cú click
-      waitGrowMs: 2600,       // đợi DOM tăng
-      hardOpenBudgetMs: 30000,
-      primeBudgetMs: 20000,
-
-      // cuộn chậm bằng rAF
-      scrollStepPx: 240,      // mỗi nhịp cuộn
-      scrollBackoffMs: 650,   // khoảng cách nhịp
-      scrollBackoffMax: 2200, // nới khi lâu không tăng
-
-      // dừng khi cạn
-      idleStopMs: 9000,       // không tăng gì trong ~9s, ở đáy, không còn nút => tính là cạn
-      stableRounds: 2         // số vòng ổn định trước khi kết thúc
+      maxComments: 500,         // dừng chính xác tại số này nếu có đủ dữ liệu
+      waitGrowMs: 2600, hardOpenBudgetMs: 30000, primeBudgetMs: 20000,
+      scrollStepPx: 240, scrollBackoffMs: 650, scrollBackoffMax: 2200,
+      clickDelay: 380, idleStopMs: 9000, stableRounds: 2
     };
   }
 
-  /* ============ utils ============ */
-  sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-  textOf(n) { return (n?.innerText || n?.textContent || n?.getAttribute?.("aria-label") || "").trim(); }
-  visible(el) { if(!el) return false; const r = el.getBoundingClientRect(); return r.width>0 && r.height>0; }
-  inDoc(n) { try { return !!(n && document.contains(n)); } catch { return false; } }
+  /* utils */
+  sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+  textOf(n){ return (n?.innerText||n?.textContent||n?.getAttribute?.("aria-label")||"").trim(); }
+  visible(el){ if(!el) return false; const r=el.getBoundingClientRect(); return r.width>0 && r.height>0; }
+  inDoc(n){ try{ return !!(n && document.contains(n)); }catch{ return false; } }
   normalize(s){return (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ").trim();}
   isPositive(txt){ const raw=txt||"", t=this.normalize(raw);
     if(/[😄😆😂🤣😊🙂😍🥰😘❤️💖💗💕👍👏🔥✨🌟💯]/.test(raw)) return true;
@@ -66,7 +38,7 @@ class TikTokCommentCollector {
   }
   cleanCommentText(raw){ if(!raw) return ""; let t=raw;
     [/Translated by Google.*$/i,/\(by KOLSprite\)/i,/\b(Translate|See translation|View translation|Xem bản dịch|Dịch)\b/ig,
-     /查看翻译|翻译|翻訳を見る|翻訳|번译|번역 보기/g,/\b(Ver traducción|Traduire|Mostrar traducción|Anzeigen.*Übersetzung)\b/ig,
+     /查看翻译|翻译|翻訳を見る|翻訳|번역 보기|번역/g,/\b(Ver traducción|Traduire|Mostrar traducción|Anzeigen.*Übersetzung)\b/ig,
      /\s*-\s*Creator\s*$/i].forEach(p=>t=t.replace(p," "));
     return t.replace(/\s+/g," ").trim();
   }
@@ -82,26 +54,18 @@ class TikTokCommentCollector {
     const d=new Date(s); return isNaN(d)? "": d.toISOString();
   }
 
-  /* ============ selectors ============ */
-  getCommentListNode(){
-    return document.querySelector('[data-e2e="comment-list"]') ||
-           document.querySelector('div[class*="DivCommentList"]') ||
-           document.querySelector('div[class*="DivCommentsContainer"]') ||
-           document.querySelector('ul[data-e2e="comment-list"]') ||
-           document.querySelector('[role="list"][data-e2e*="comment"]');
-  }
-  repliesRegex(){ return new RegExp([
-    String.raw`\b(view|show|see|more)\s*\d*\s*repl(?:y|ies)\b`,
-    String.raw`xem\s*(\d+)?\s*(phản\s*hồi|câu\s*trả\s*lời|trả\s*lời)`,
-    String.raw`xem\s*thêm\s*(phản\s*hồi|trả\s*lời)`,
-    `查看回复`,`更多回复`,`显示回复`,`展开回复`,`返信を表示`,`さらに返信を表示`,
-    `댓글\\s*더보기`,`답글\\s*보기`,`더 많은 답글`,`ver\\s*respuestas`,`mostrar\\s*respuestas`,
-    `afficher\\s*les\\s*r?éponses`,`weitere\\s*antworten`,`risposte|vedi\\s*risposte`,
-    `balasan|lihat\\s*balasan`,`odpowiedzi|pokaż\\s*odpowiedzi`
-  ].join("|"),"i"); }
+  /* selectors */
+  getCommentListNode(){ return document.querySelector('[data-e2e="comment-list"]') ||
+    document.querySelector('div[class*="DivCommentList"]') || document.querySelector('div[class*="DivCommentsContainer"]') ||
+    document.querySelector('ul[data-e2e="comment-list"]') || document.querySelector('[role="list"][data-e2e*="comment"]'); }
+  repliesRegex(){ return new RegExp([String.raw`\b(view|show|see|more)\s*\d*\s*repl(?:y|ies)\b`,
+    String.raw`xem\s*(\d+)?\s*(phản\s*hồi|câu\s*trả\s*lời|trả\s*lời)`, String.raw`xem\s*thêm\s*(phản\s*hồi|trả\s*lời)`,
+    `查看回复`,`更多回复`,`显示回复`,`展开回复`,`返信を表示`,`さらに返信を表示`,`댓글\\s*더보기`,`답글\\s*보기`,`더 많은 답글`,
+    `ver\\s*respuestas`,`mostrar\\s*respuestas`,`afficher\\s*les\\s*r?éponses`,`weitere\\s*antworten`,
+    `risposte|vedi\\s*risposte`,`balasan|lihat\\s*balasan`,`odpowiedzi|pokaż\\s*odpowiedzi`].join("|"),"i"); }
   loadMoreRegex(){ return /(more\s+comments|view\s+more|load\s+more|see\s+more|show\s+more|more|xem\s+thêm|thêm\s+bình\s+luận|hiển\s*thị\s*thêm|更多评论|查看更多|更多|さらに表示|もっと見る|더보기)/i; }
 
-  /* ============ open/ensure panel ============ */
+  /* open/ensure panel */
   findOpenButtons(){
     const sels=['[data-e2e="comment-icon"]','[data-e2e="browse-comment-icon"]','[data-e2e="detail-comment-icon"]','[data-e2e="comment-button"]',
       'button[aria-label*="comment" i]','a[aria-label*="comment" i]','[aria-label*="bình luận" i]'];
@@ -138,7 +102,7 @@ class TikTokCommentCollector {
     return false;
   }
 
-  /* ============ scroller/observer ============ */
+  /* scroller / observer */
   findScrollableParent(el){
     let n=el; while(n&&n!==document.body){
       const st=getComputedStyle(n);
@@ -196,14 +160,15 @@ class TikTokCommentCollector {
           parent_author:d.parent_author||"", parent_text:d.parent_text||"",
           collectedAt:new Date().toISOString()
         });
+        if (this.collectedIds.size >= Math.max(1,this.settings.maxComments)) break;
       }
-      if(this._queue.length>0 && this.isCollecting) return run();
+      if(this._queue.length>0 && this.isCollecting && this.collectedIds.size < Math.max(1,this.settings.maxComments)) return run();
       this._processing=false;
     });};
     run();
   }
 
-  /* ============ extract ============ */
+  /* extract */
   isComposerNode(node){
     if(!node) return false;
     if(node.querySelector?.('div[contenteditable],textarea,input[type="text"]')) return true;
@@ -212,7 +177,6 @@ class TikTokCommentCollector {
   }
   extract(item){
     if(!item || this.isComposerNode(item)) return null;
-
     const linkEl=item.querySelector?.('[data-e2e="comment-username"] a[href*="/@"]')|| item.querySelector?.('a[href*="/@"]');
     const author_profile_url=linkEl?.href||"";
     const author_username=(linkEl?.getAttribute?.("href")||"").split("/@")[1]?.split(/[/?#]/)[0]||"";
@@ -266,9 +230,9 @@ class TikTokCommentCollector {
       permalink, is_positive, parent_author, parent_text };
   }
 
-  /* ============ buttons/finders ============ */
+  /* find buttons */
   _findReplyButtonsIn(root){
-    const R=this.repliesRegex(), bad=/(hide|collapse|thu gọn|ẩn|접기|숨기기|隱藏|隐藏|非表示)/i;
+    const R=this.repliesRegex(), bad=/(hide|collapse|thu gọn|ẩn|接|숨|隱|隐|非表示)/i;
     const pool=root.querySelectorAll?.('button,a,div[role="button"],span,p')||[];
     const out=[];
     for(const b of pool){
@@ -296,11 +260,10 @@ class TikTokCommentCollector {
     return [...new Set(out)];
   }
 
-  /* ============ greedy expand (slow) ============ */
+  /* greedy chậm rãi */
   async expandThreadFully(root){
-    // bấm lần lượt, chờ tăng rồi mới bấm tiếp -> chậm mà chắc
     let guard=0;
-    while(this.isCollecting && guard<50){
+    while(this.isCollecting && guard<50 && this.collectedIds.size < Math.max(1,this.settings.maxComments)){
       guard++;
       const btns=this._findReplyButtonsIn(root);
       if(!btns.length) break;
@@ -315,22 +278,20 @@ class TikTokCommentCollector {
     }
   }
   async expandAllThreadsSlow(){
-    // duyệt từng top-level, đào replies hết sạch
     let index = 0;
-    while(this.isCollecting){
+    while(this.isCollecting && this.collectedIds.size < Math.max(1,this.settings.maxComments)){
       const roots = Array.from(document.querySelectorAll('[data-e2e="comment-item"]:not([data-e2e="comment-reply-item"]), div[class*="CommentItem"]:not([data-e2e="comment-reply-item"])'));
       if (!roots.length) break;
       if (index >= roots.length) index = 0;
       const r = roots[index++];
       if (!this.visible(r)) { await this._scrollIntoViewSlow(r); continue; }
       await this.expandThreadFully(r);
-      // sau mỗi thread, thử nạp thêm top-level
       await this.loadMoreTopLevelSlow();
     }
   }
   async loadMoreTopLevelSlow(){
     let stagnant=0;
-    while(this.isCollecting && stagnant<2){
+    while(this.isCollecting && stagnant<2 && this.collectedIds.size < Math.max(1,this.settings.maxComments)){
       const before = this._countTopLevel();
       const btns = this._findLoadMoreButtons();
       if(!btns.length) break;
@@ -345,17 +306,10 @@ class TikTokCommentCollector {
     }
   }
 
-  _countTopLevel(){
-    try{
-      return document.querySelectorAll('[data-e2e="comment-item"]:not([data-e2e="comment-reply-item"]), div[class*="CommentItem"]:not([data-e2e="comment-reply-item"])').length || 0;
-    }catch{ return 0; }
-  }
-  _scrollIntoViewSlow(el){
-    return new Promise(res=>{
-      try{ el.scrollIntoView({block:"nearest"}); }catch{}
-      setTimeout(res, this.settings.clickDelay);
-    });
-  }
+  _countTopLevel(){ try{
+    return document.querySelectorAll('[data-e2e="comment-item"]:not([data-e2e="comment-reply-item"]), div[class*="CommentItem"]:not([data-e2e="comment-reply-item"])').length || 0;
+  }catch{ return 0; } }
+  _scrollIntoViewSlow(el){ return new Promise(res=>{ try{ el.scrollIntoView({block:"nearest"}); }catch{} setTimeout(res,this.settings.clickDelay); }); }
   _waitIncrease(counter, timeout){
     return new Promise(res=>{
       let base = Number(counter()||0);
@@ -367,12 +321,12 @@ class TikTokCommentCollector {
     });
   }
 
-  /* ============ slow scroll loop ============ */
   _startSlowScroll(){
     const s = this.getScroller();
     let last=0, backoff=this.settings.scrollBackoffMs, phase=0;
     const step = (ts)=>{
       if(!this.isCollecting) return;
+      if(this.collectedIds.size >= Math.max(1,this.settings.maxComments)) return;
       if (ts - last > backoff){
         const delta = this.settings.scrollStepPx * (phase%2?1:1.4);
         try{ s.scrollBy({top:delta, behavior:"smooth"}); }catch{ s.scrollTop += delta; }
@@ -385,10 +339,9 @@ class TikTokCommentCollector {
     this._scrollRAF = requestAnimationFrame(step);
   }
 
-  /* ============ lifecycle ============ */
   async primeLoad(){
     const deadline = Date.now()+this.settings.primeBudgetMs;
-    while(this.isCollecting && Date.now()<deadline){
+    while(this.isCollecting && Date.now()<deadline && this.collectedIds.size < Math.max(1,this.settings.maxComments)){
       await this.forceOpenComments();
       await this.loadMoreTopLevelSlow();
       if (this._countTopLevel()>0) return;
@@ -396,18 +349,21 @@ class TikTokCommentCollector {
     }
   }
   _shouldStop(){
-    // dừng khi: không còn nút, ở đáy, idle lâu và không tăng số lượng 2 vòng liên tiếp
     const s = this.getScroller();
     const atBottom = s.scrollTop >= s.scrollHeight - s.clientHeight - 4;
     const noBtns = this._findReplyButtons().length===0 && this._findLoadMoreButtons().length===0;
     const idle = Date.now() - this._lastNewAt;
     return noBtns && atBottom && idle > this.settings.idleStopMs;
   }
+
   finish(){
+    const target = Math.max(1, this.settings.maxComments);
+    if (this.comments.length > target) this.comments = this.comments.slice(0, target);
     this.comments.sort((a,b)=>(b.like_count||0)-(a.like_count||0));
     this.comments.forEach((c,i)=>c.rank=i+1);
     chrome.runtime.sendMessage({action:"collectionComplete", data:this.comments});
   }
+
   stop(){
     this.isCollecting = false;
     try{ this._observer?.disconnect(); }catch{}
@@ -423,43 +379,34 @@ class TikTokCommentCollector {
     this.isCollecting = true;
     this.collectedIds.clear(); this.comments.length=0; this.positiveCount=0;
     this._lastNewAt = Date.now();
+    this.settings.maxComments = Math.max(1, parseInt(this.settings.maxComments||500,10));
 
     chrome.runtime.sendMessage({action:"collectionStarted"});
 
     try{
-      // ép collectAll nếu không bật forceMax
-      const unlimited = this.settings.collectAll && !this.settings.forceMax;
-
       const ok = await this.ensureCommentsPanel();
       if(!ok) throw new Error("Không mở được bảng bình luận (video có thể tắt bình luận).");
 
       this._panel = this.getCommentListNode() || document.body;
       this._installObserver(this._panel);
 
-      // gửi progress đều đặn
       this._progressTimer = setInterval(()=>{
-        const totalHint = unlimited ? (this.collectedIds.size + 200) : this.settings.maxComments;
         chrome.runtime.sendMessage({
           action:"updateProgress",
-          data:{ current:this.collectedIds.size, total: totalHint, positive: this.positiveCount }
+          data:{ current:this.collectedIds.size, total:this.settings.maxComments, positive:this.positiveCount }
         });
       }, 2000);
 
       await this.primeLoad();
       this._startSlowScroll();
 
-      // vòng greedy chậm
       let stable = 0;
       while(this.isCollecting){
-        // nếu đặt forceMax -> dừng theo số lượng
-        if (!unlimited && this.collectedIds.size >= this.settings.maxComments) break;
-
-        await this.expandAllThreadsSlow();   // đào replies từ tốn
-        await this.loadMoreTopLevelSlow();   // nạp top-level thêm
-
+        if (this.collectedIds.size >= this.settings.maxComments) break;
+        await this.expandAllThreadsSlow();
+        await this.loadMoreTopLevelSlow();
         if (this._shouldStop()) stable++; else stable = 0;
         if (stable >= this.settings.stableRounds) break;
-
         await this.sleep(350);
       }
 
@@ -471,13 +418,9 @@ class TikTokCommentCollector {
     }
   }
 
-  /* ============ messaging ============ */
   init(){
     chrome.runtime.onMessage.addListener((req,_s,sendResponse)=>{
-      if(req?.action==="startCollection"){
-        this.settings = { ...this.settings, ...(req.settings||{}) };
-        this.start(); sendResponse?.({ok:true}); return true;
-      }
+      if(req?.action==="startCollection"){ this.settings = { ...this.settings, ...(req.settings||{}) }; this.start(); sendResponse?.({ok:true}); return true; }
       if(req?.action==="stopCollection"){ this.stop(); sendResponse?.({ok:true}); return true; }
       if(req?.action==="__ping__"){ sendResponse?.({ok:true}); return true; }
     });
