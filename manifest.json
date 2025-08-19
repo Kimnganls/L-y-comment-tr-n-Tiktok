@@ -1,19 +1,30 @@
 {
   "manifest_version": 3,
   "name": "TikTok Comment Analyzer",
-  "version": "1.0.3",
-  "description": "Thu thập bình luận TikTok (kèm replies) và xuất Excel",
-  "permissions": ["activeTab", "storage", "scripting", "downloads"],
-  "host_permissions": ["*://*.tiktok.com/*"],
+  "version": "1.4.0",
+  "description": "Thu thập bình luận TikTok và xuất Excel (.xls).",
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "TikTok Comment Analyzer"
+    "default_title": "TikTok Comment Analyzer",
+    "default_popup": "popup.html"
   },
-  "content_scripts": [
+  "permissions": [
+    "scripting",
+    "activeTab",
+    "downloads",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://*.tiktok.com/*",
+    "http://*.tiktok.com/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "web_accessible_resources": [
     {
-      "matches": ["*://*.tiktok.com/*"],
-      "js": ["content.js"],
-      "run_at": "document_idle"
+      "resources": ["content.js", "style.css"],
+      "matches": ["<all_urls>"]
     }
   ]
 }

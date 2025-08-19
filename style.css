@@ -1,3 +1,4 @@
+/* ===== Nền & khung tổng ===== */
 *{box-sizing:border-box}
 html,body{
   margin:0;padding:0;width:360px;max-width:360px;overflow-x:hidden;
@@ -13,12 +14,18 @@ html,body{
   border-radius:14px;padding:10px 12px;font-weight:800;font-size:14px;letter-spacing:.2px;
   margin-bottom:10px;color:#1b0e00;
 }
+
+/* ===== Thông báo trạng thái ===== */
 .status{background:#122137;border:1px solid #253755;border-radius:12px;padding:10px 12px;font-size:13px;margin:8px 0 10px}
 .status.success{background:#123525;border-color:#2a6146;color:#dfffe9}
 .status.error{background:#3a1b22;border-color:#5a2a31;color:#ffe9ee}
 .status.collecting{background:#15233a;border-color:#274165}
+
+/* ===== Progress bar ===== */
 .progress-bar{height:8px;border-radius:999px;background:#18253b;border:1px solid #283a56;overflow:hidden;margin-bottom:12px}
-#progressFill{height:100%;width:0%;background:linear-gradient(90deg,#47a1ff 0%,#8e2de2 100%);transition:width .25s ease}
+#progressFill{height:100%;width:0%;background:linear-gradient(90deg,#47a1ff 0%,#06b6d4 50%,#8e2de2 100%);transition:width .25s ease}
+
+/* ===== Nút bấm ===== */
 .controls{display:flex;flex-direction:column;gap:10px;margin-bottom:10px}
 .btn{
   width:100%;padding:12px 14px;border:none;border-radius:16px;font-weight:800;font-size:15px;cursor:pointer;
@@ -30,15 +37,34 @@ html,body{
 .btn-success{background:linear-gradient(90deg,#2bd67b 0%,#18b26e 100%);color:#06140e}
 .btn-secondary{background:linear-gradient(90deg,#bb99ff 0%,#e2b5ff 100%);color:#1a0b2a}
 .hidden{display:none!important}
+
+/* ===== 2 ô số liệu – chuyển sang gradient/màu lai ===== */
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:4px 0 12px}
-.stat-item{border-radius:14px;padding:14px 10px;text-align:center;border:1px solid #27334a}
+.stat-item{
+  border-radius:14px;padding:14px 10px;text-align:center;border:1px solid #27334a;
+  box-shadow: inset 0 0 12px rgba(255,255,255,.06);
+}
 .stat-number{font-size:22px;font-weight:900;display:block;margin-bottom:2px}
-.stat-label{font-size:12px;opacity:.85}
-.stat-blue{background:linear-gradient(135deg,#111b34 0%,#1a2f54 100%)}
-.stat-green{background:linear-gradient(135deg,#10261c 0%,#1f3a2a 100%)}
+.stat-label{font-size:12px;opacity:.9;letter-spacing:.2px}
+
+/* Bình luận: xanh dương chuyển sắc */
+.stat-comments{
+  background:linear-gradient(135deg,#1e3c72 0%,#2a5298 60%,#4f7cff 100%);
+}
+
+/* Tích cực: xanh ngọc → xanh lá */
+.stat-positive{
+  background:linear-gradient(135deg,#11998e 0%,#2bd67b 60%,#38ef7d 100%);
+}
+
+/* ===== Khối cài đặt ===== */
 .settings{margin-top:6px;background:#0e1522;border:1px solid #24324c;border-radius:16px;padding:12px}
 .settings h3{margin:0 0 8px;font-size:14px}
-.setting-item{display:flex;justify-content:space-between;align-items:center;gap:10px}
-input[type="number"]{
-  width:120px;background:#151d2a;border:1px solid #2a3750;border-radius:12px;padding:9px 10px;color:#e6ecff;text-align:center;outline:none
+.setting-item{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:8px 0}
+
+/* input/select/checkbox đồng bộ màu */
+input[type="number"], select{
+  width:140px;background:#151d2a;border:1px solid #2a3750;border-radius:12px;padding:9px 10px;
+  color:#e6ecff;outline:none
 }
+input[type="checkbox"]{ transform: scale(1.15); accent-color:#4f7cff; }
