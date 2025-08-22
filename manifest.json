@@ -5,7 +5,7 @@
 
   "action": { "default_popup": "popup.html" },
 
-  "permissions": ["activeTab", "tabs", "scripting"],
+  "permissions": ["activeTab", "tabs", "scripting", "storage"],
 
   "host_permissions": [
     "*://www.tiktok.com/*",
@@ -30,7 +30,11 @@
   "web_accessible_resources": [
     {
       "resources": ["pageHook.js"],
-      "matches": ["*://www.tiktok.com/*", "*://m.tiktok.com/*", "*://*.tiktok.com/*"]
+      "matches": [
+        "*://www.tiktok.com/*",
+        "*://m.tiktok.com/*",
+        "*://*.tiktok.com/*"
+      ]
     }
   ]
 }
